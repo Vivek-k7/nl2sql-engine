@@ -1,16 +1,15 @@
 import requests
 from schema import get_schema_context
-
-ALL_TABLES = [
-    "customers", "sellers", "products", "product_category_name_translation",
-    "orders", "order_items", "order_payments", "order_reviews", "geolocation"
-]
+from intent import intent_detector
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "llama3.1:latest"
 
 def generate_sql(user_question: str, error_history: list = []) -> str:
-    SCHEMA_CONTEXT = get_schema_context(ALL_TABLES)
+
+    tables = intent_detector(user_question)
+
+    SCHEMA_CONTEXT = get_schema_context(tables)
     error_context = ""
     
     if error_history:

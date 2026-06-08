@@ -4,13 +4,11 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-postgres_pass = os.getenv("POSTGRES_PASSWORD")
-
 DB_CONFIG = {
-    "host": "localhost",
-    "database": "nl2sql_ecommerce",
-    "user": "postgres",
-    "password": postgres_pass
+    "host": os.getenv("DB_HOST"),
+    "database": os.getenv("DB_NAME"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD")
 }
 
 def get_schema_context(tables: list[str]) -> str:

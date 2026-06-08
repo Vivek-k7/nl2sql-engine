@@ -1,9 +1,12 @@
-import requests
-from schema import get_schema_context
-from intent import intent_detector
+from langchain_ollama import ChatOllama
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "llama3.1:latest"
+MODEL = os.getenv("MODEL")
+llm = ChatOllama(
+        model=MODEL,
+    )
 
 def generate_sql(user_question: str, schema_context: str, error_history: list = []) -> str:
 
@@ -17,15 +20,10 @@ def generate_sql(user_question: str, schema_context: str, error_history: list = 
         error_context += "\nFix the errors above and generate a corrected SQL query."
     
     prompt = f"{SCHEMA_CONTEXT}{error_context}\n\nQuestion: {user_question}\n\nSQL:"
+
+    response = llm.invoke(prompt)
     
-    response = requests.post(OLLAMA_URL, json={
-        "model": MODEL,
-        "prompt": prompt,
-        "stream": False
-    })
-    
-    response.raise_for_status()
-    return response.json()["response"].strip()
+    return response.content
 
 
 if __name__ == "__main__":

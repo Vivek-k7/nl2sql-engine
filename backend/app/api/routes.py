@@ -1,13 +1,13 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import APIRouter, WebSocket
+from app.core.graph import graph
 from pydantic import BaseModel
-from graph import graph
-
-app = FastAPI()
 
 class QueryRequest(BaseModel):
     question: str
 
-@app.post("/query")
+router = APIRouter()
+
+@router.post("/query")
 async def query(request: QueryRequest):
     initial_state = {
         "question": request.question,
@@ -29,7 +29,7 @@ async def query(request: QueryRequest):
         "attempts": result["attempts"]
     }
 
-@app.websocket("/ws/query")
+@router.websocket("/ws/query")
 async def query_ws(websocket: WebSocket):
     await websocket.accept()
     

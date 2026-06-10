@@ -1,7 +1,12 @@
-import requests
+from langchain_ollama import ChatOllama
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "llama3.1:latest"
+MODEL = os.getenv("MODEL")
+llm = ChatOllama(
+        model=MODEL,
+    )
 
 SYSTEM_PROMPT = """
 You are a database routing assistant. Given a natural language question, return only the names of the tables needed to answer it.
@@ -28,13 +33,8 @@ def intent_detector(query: str) -> list:
 
     prompt = SYSTEM_PROMPT + f"\nQuery: {query}"
 
-    response = requests.post(OLLAMA_URL, json={
-        "model": MODEL,
-        "prompt": prompt ,
-        "stream": False
-    })
+    response = llm.invoke(prompt)
     
-    response.raise_for_status()
-    tables = response.json()["response"].strip().split(",")
+    tables = response.content.strip().split(",")
     tables = [t.strip() for t in tables]
     return tables

@@ -1,10 +1,10 @@
 from typing import TypedDict, Annotated
 from operator import add
 from langgraph.graph import StateGraph, END
-from intent import intent_detector
-from schema import get_schema_context
-from llm import generate_sql
-from db import execute_sql
+from app.core.intent import intent_detector
+from app.core.schema import get_schema_context
+from app.core.llm import generate_sql
+from app.db.connector import execute_sql
 
 MAX_RETRIES = 3
 

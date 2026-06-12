@@ -46,7 +46,26 @@ async def query_ws(websocket: WebSocket):
         "attempts": 0
     }
     
+    final_state = {}
+    
     async for chunk in graph.astream(initial_state):
         await websocket.send_json(chunk)
+        final_state.update(chunk)
 
+    result = final_state.get("execute", {}).get("result", {})
+    
+    if result.get("success"):
+        await websocket.send_json({
+            "status": "success",
+            "sql": final_state.get("sql_gen", {}).get("sql"),
+            "data": result.get("data"),
+            "attempts": final_state.get("sql_gen", {}).get("attempts")
+        })
+    else:
+        await websocket.send_json({
+            "status": "failed",
+            "message": "Max retries reached. Could not generate a valid query.",
+            "error_history": initial_state["error_history"]
+        })
+    
     await websocket.close()

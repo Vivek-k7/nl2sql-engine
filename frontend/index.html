@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NL2SQL Engine</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f0f0f;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #ffffff;
+        }
+
+        p.subtitle {
+            color: #888;
+            margin-bottom: 40px;
+            font-size: 0.95rem;
+        }
+
+        .input-area {
+            width: 100%;
+            max-width: 700px;
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            font-size: 1rem;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #1A56A0;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: #1A56A0;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #1648888;
+        }
+
+        button:disabled {
+            background: #333;
+            cursor: not-allowed;
+        }
+
+        .output {
+            width: 100%;
+            max-width: 700px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 10px;
+            padding: 16px 20px;
+        }
+
+        .card h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .card pre {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #c9d1d9;
+        }
+
+        .status {
+            font-size: 0.85rem;
+            padding: 6px 12px;
+            border-radius: 6px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+
+        .status.success { background: #0d3320; color: #4caf7d; }
+        .status.failed { background: #3a0d0d; color: #e05555; }
+        .status.running { background: #1a2a3a; color: #5b9bd5; }
+
+        .node-log {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .node-item {
+            font-size: 0.82rem;
+            color: #888;
+            padding: 4px 0;
+            border-bottom: 1px solid #222;
+        }
+
+        .node-item span {
+            color: #1A56A0;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <h1>NL2SQL Engine</h1>
+    <p class="subtitle">Ask a question in plain English. Get SQL and results.</p>
+
+    <div class="input-area">
+        <input type="text" id="question" placeholder="e.g. How many orders were delivered successfully?" />
+        <button id="submitBtn" onclick="submitQuery()">Ask</button>
+    </div>
+
+    <div class="output" id="output"></div>
+
+    <script>
+        function submitQuery() {
+            const question = document.getElementById('question').value.trim();
+            if (!question) return;
+
+            const output = document.getElementById('output');
+            const btn = document.getElementById('submitBtn');
+            output.innerHTML = '';
+            btn.disabled = true;
+
+            const statusDiv = document.createElement('div');
+            statusDiv.className = 'card';
+            statusDiv.innerHTML = '<span class="status running">Running...</span><div class="node-log" id="nodeLog"></div>';
+            output.appendChild(statusDiv);
+
+            const ws = new WebSocket('ws://localhost:8000/ws/query');
+
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ question }));
+            };
+
+            ws.onmessage = (event) => {
+                const chunk = JSON.parse(event.data);
+                const nodeLog = document.getElementById('nodeLog');
+
+                if (chunk.status === 'success') {
+                    statusDiv.querySelector('.status').className = 'status success';
+                    statusDiv.querySelector('.status').textContent = 'Success';
+
+                    const sqlCard = document.createElement('div');
+                    sqlCard.className = 'card';
+                    sqlCard.innerHTML = `<h3>Generated SQL</h3><pre>${chunk.sql}</pre>`;
+                    output.appendChild(sqlCard);
+
+                    const dataCard = document.createElement('div');
+                    dataCard.className = 'card';
+                    dataCard.innerHTML = `<h3>Result</h3><pre>${JSON.stringify(chunk.data, null, 2)}</pre>`;
+                    output.appendChild(dataCard);
+
+                    const attemptsCard = document.createElement('div');
+                    attemptsCard.className = 'card';
+                    attemptsCard.innerHTML = `<h3>Attempts</h3><pre>${chunk.attempts}</pre>`;
+                    output.appendChild(attemptsCard);
+
+                } else if (chunk.status === 'failed') {
+                    statusDiv.querySelector('.status').className = 'status failed';
+                    statusDiv.querySelector('.status').textContent = 'Failed';
+
+                    const errCard = document.createElement('div');
+                    errCard.className = 'card';
+                    errCard.innerHTML = `<h3>Error</h3><pre>${chunk.message}</pre>`;
+                    output.appendChild(errCard);
+
+                } else {
+                    const nodeName = Object.keys(chunk)[0];
+                    const item = document.createElement('div');
+                    item.className = 'node-item';
+                    item.innerHTML = `<span>${nodeName}</span> node completed`;
+                    nodeLog.appendChild(item);
+                }
+            };
+
+            ws.onclose = () => {
+                btn.disabled = false;
+            };
+
+            ws.onerror = () => {
+                statusDiv.querySelector('.status').className = 'status failed';
+                statusDiv.querySelector('.status').textContent = 'Connection error';
+                btn.disabled = false;
+            };
+        }
+
+        document.getElementById('question').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitQuery();
+        });
+    </script>
+</body>
+</html>

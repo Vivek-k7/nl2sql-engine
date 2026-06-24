@@ -1,12 +1,15 @@
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 import os
 from dotenv import load_dotenv
+from app.db.connector import clean_sql
 load_dotenv()
 
-MODEL = os.getenv("MODEL")
-llm = ChatOllama(
-        model=MODEL,
-    )
+MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+llm = ChatGroq(
+    model=MODEL,
+    temperature=0,
+)
 
 def generate_sql(user_question: str, schema_context: str, error_history: list = []) -> str:
 
@@ -23,7 +26,7 @@ def generate_sql(user_question: str, schema_context: str, error_history: list = 
 
     response = llm.invoke(prompt)
     
-    return response.content
+    return clean_sql(response.content)
 
 
 if __name__ == "__main__":

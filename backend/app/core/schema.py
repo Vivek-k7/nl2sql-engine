@@ -26,14 +26,14 @@ RELATIONSHIPS = [
     (
         "customers",
         "customer_zip_code_prefix",
-        "geolocation",
-        "geolocation_zip_code_prefix",
+        "zip_location",
+        "zip_code_prefix",
     ),
     (
         "sellers",
         "seller_zip_code_prefix",
-        "geolocation",
-        "geolocation_zip_code_prefix",
+        "zip_location",
+        "zip_code_prefix",
     ),
 ]
 
@@ -112,33 +112,82 @@ Use only the tables and columns listed in the schema below. Do not invent tables
 
     SCHEMA_CONTEXT += get_relationship_context(list(schema.keys()))
 
-    SCHEMA_CONTEXT += """--- BUSINESS NOTES ---
-- A successfully delivered order usually means orders.order_status = 'delivered'
-- Revenue is usually calculated from order_items.price, or order_payments.payment_value if the question is about payments
-- Product category names in products.product_category_name are in Portuguese
-- Use product_category_name_translation.product_category_name_english when the user asks for category names in English
-- Review ratings are stored in order_reviews.review_score
-- Customer location is stored in customers.customer_city and customers.customer_state
-- Seller location is stored in sellers.seller_city and sellers.seller_state
-- Order purchase time is stored in orders.order_purchase_timestamp
-- Delivery completion time is stored in orders.order_delivered_customer_date
+    TABLE_GRAINS = {
+        "customers": (
+            "one row per customer_id; customer_unique_id identifies the "
+            "same real customer across multiple customer records"
+        ),
+        "orders": "one row per order_id",
+        "order_items": (
+            "one row per item position in an order, identified by "
+            "(order_id, order_item_id)"
+        ),
+        "order_payments": (
+            "one row per payment transaction or payment sequence for an order"
+        ),
+        "order_reviews": "one row per review record, identified by review_id",
+        "products": "one row per product_id",
+        "sellers": "one row per seller_id",
+        "product_category_name_translation": (
+            "one row per Portuguese product category name"
+        ),
+        "zip_location": "one row per zip_code_prefix",
+    }
+
+    SCHEMA_CONTEXT += "--- TABLE GRAINS ---\n"
+    SCHEMA_CONTEXT += (
+        "Use table grain to determine what each row represents and how "
+        "entities should be counted:\n\n"
+    )
+    for table_name in schema:
+        if table_name in TABLE_GRAINS:
+            SCHEMA_CONTEXT += f"- {table_name}: {TABLE_GRAINS[table_name]}\n"
+    SCHEMA_CONTEXT += "\n"
+
+    BUSINESS_NOTES = {
+        "customers": (
+            "customer_unique_id is the real customer identity; customer "
+            "location uses customer_city and customer_state"
+        ),
+        "orders": (
+            "delivered orders have order_status = 'delivered'; purchase and "
+            "delivery times are stored in the order timestamp columns"
+        ),
+        "order_items": "item-price revenue uses price; shipping cost uses freight_value",
+        "order_payments": "payment spending uses payment_value",
+        "order_reviews": "review ratings use review_score",
+        "products": "product_category_name is in Portuguese",
+        "sellers": "seller location uses seller_city and seller_state",
+        "product_category_name_translation": (
+            "English category names use product_category_name_english"
+        ),
+    }
+
+    selected_notes = [
+        f"- {BUSINESS_NOTES[table_name]}"
+        for table_name in schema
+        if table_name in BUSINESS_NOTES
+    ]
+    if selected_notes:
+        SCHEMA_CONTEXT += "--- RELEVANT BUSINESS NOTES ---\n"
+        SCHEMA_CONTEXT += "\n".join(selected_notes) + "\n\n"
+
+    SCHEMA_CONTEXT += """--- QUERY PLANNING ---
+Reason internally before writing SQL:
+1. Dimensions: entity, category, location, or time values requested in the result.
+2. Measures: counts, sums, averages, minima, or maxima requested or used for ranking.
+3. Filters: conditions stated in the question.
+4. Ranking: the measure, direction, and requested number of rows.
 
 --- SQL RULES ---
-- Return only the SQL query
-- Do not include explanations, markdown, comments, or backticks
-- Generate exactly one SQL statement
-- Generate only a read-only SELECT query
-- WITH common table expressions are allowed only if the final statement is a SELECT
-- Never generate INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE, COPY, GRANT, or REVOKE
-- Always use explicit JOIN ... ON syntax
-- Never use implicit comma joins
-- Qualify column names with table names or aliases when more than one table is used
-- Use clear table aliases for multi-table queries
-- Add LIMIT 100 for detail/listing queries
-- Do not add LIMIT for aggregate queries that return one small summary result
-- Use COUNT(*) for counting rows unless a specific column needs distinct counting
-- Use COUNT(DISTINCT column) when the question asks for unique entities
-- Use ORDER BY when asking for top, highest, lowest, most, least, best, or worst
+- Return exactly one read-only PostgreSQL SELECT query and no other text.
+- Use only listed tables, columns, and DATABASE RELATIONSHIPS; never invent a join.
+- Put every requested dimension in SELECT and, for aggregate queries, GROUP BY.
+- Put every requested measure in SELECT, including the aggregate used to rank groups.
+- Count at the requested entity's TABLE GRAIN. Use COUNT(*) when one row equals one entity; use COUNT(DISTINCT key) only for unique entities or join duplication.
+- Use the business identity described in TABLE GRAINS when the question asks for a unique real-world entity.
+- Use ORDER BY on the ranking measure. Singular highest/lowest/most/least/best/worst means LIMIT 1; top/bottom N means LIMIT N.
+- Use explicit JOIN ... ON clauses and clear, non-keyword aliases.
+- Add LIMIT 100 only to unbounded detail listings, never to aggregate or ranked queries.
 """
-    print(SCHEMA_CONTEXT)
     return SCHEMA_CONTEXT

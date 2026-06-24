@@ -71,7 +71,7 @@
         }
 
         button:hover {
-            background: #1648888;
+            background: #164888;
         }
 
         button:disabled {
@@ -153,18 +153,56 @@
     <div class="output" id="output"></div>
 
     <script>
+        function createTextCard(title, content) {
+            const card = document.createElement('div');
+            card.className = 'card';
+
+            const heading = document.createElement('h3');
+            heading.textContent = title;
+
+            const pre = document.createElement('pre');
+            pre.textContent = String(content ?? '');
+
+            card.append(heading, pre);
+            return card;
+        }
+
         function submitQuery() {
             const question = document.getElementById('question').value.trim();
-            if (!question) return;
+            if (!question) {
+                const output = document.getElementById('output');
+                const card = document.createElement('div');
+                card.className = 'card';
+
+                const status = document.createElement('span');
+                status.className = 'status failed';
+                status.textContent = 'Error';
+
+                const message = document.createElement('pre');
+                message.style.marginTop = '10px';
+                message.textContent = 'Please enter a question';
+
+                card.append(status, message);
+                output.replaceChildren(card);
+                return;
+            }
 
             const output = document.getElementById('output');
             const btn = document.getElementById('submitBtn');
-            output.innerHTML = '';
+            output.replaceChildren();
             btn.disabled = true;
 
             const statusDiv = document.createElement('div');
             statusDiv.className = 'card';
-            statusDiv.innerHTML = '<span class="status running">Running...</span><div class="node-log" id="nodeLog"></div>';
+
+            const statusBadge = document.createElement('span');
+            statusBadge.className = 'status running';
+            statusBadge.textContent = 'Running...';
+
+            const nodeLog = document.createElement('div');
+            nodeLog.className = 'node-log';
+
+            statusDiv.append(statusBadge, nodeLog);
             output.appendChild(statusDiv);
 
             const ws = new WebSocket('ws://localhost:8000/ws/query');
@@ -174,43 +212,49 @@
             };
 
             ws.onmessage = (event) => {
-                const chunk = JSON.parse(event.data);
-                const nodeLog = document.getElementById('nodeLog');
+                const message = JSON.parse(event.data);
 
-                if (chunk.status === 'success') {
-                    statusDiv.querySelector('.status').className = 'status success';
-                    statusDiv.querySelector('.status').textContent = 'Success';
+                if (message.type === 'accepted') {
+                    statusBadge.className = 'status running';
+                    statusBadge.textContent = 'Running...';
 
-                    const sqlCard = document.createElement('div');
-                    sqlCard.className = 'card';
-                    sqlCard.innerHTML = `<h3>Generated SQL</h3><pre>${chunk.sql}</pre>`;
-                    output.appendChild(sqlCard);
+                } else if (message.type === 'progress') {
+                    const nodeName = Object.keys(message.chunk)[0];
 
-                    const dataCard = document.createElement('div');
-                    dataCard.className = 'card';
-                    dataCard.innerHTML = `<h3>Result</h3><pre>${JSON.stringify(chunk.data, null, 2)}</pre>`;
-                    output.appendChild(dataCard);
-
-                    const attemptsCard = document.createElement('div');
-                    attemptsCard.className = 'card';
-                    attemptsCard.innerHTML = `<h3>Attempts</h3><pre>${chunk.attempts}</pre>`;
-                    output.appendChild(attemptsCard);
-
-                } else if (chunk.status === 'failed') {
-                    statusDiv.querySelector('.status').className = 'status failed';
-                    statusDiv.querySelector('.status').textContent = 'Failed';
-
-                    const errCard = document.createElement('div');
-                    errCard.className = 'card';
-                    errCard.innerHTML = `<h3>Error</h3><pre>${chunk.message}</pre>`;
-                    output.appendChild(errCard);
-
-                } else {
-                    const nodeName = Object.keys(chunk)[0];
                     const item = document.createElement('div');
                     item.className = 'node-item';
-                    item.innerHTML = `<span>${nodeName}</span> node completed`;
+
+                    const nodeLabel = document.createElement('span');
+                    nodeLabel.textContent = nodeName;
+
+                    item.append(nodeLabel, document.createTextNode(' node completed'));
                     nodeLog.appendChild(item);
+
+                } else if (message.type === 'final') {
+                    if (message.success) {
+                        statusBadge.className = 'status success';
+                        statusBadge.textContent = 'Success';
+
+                        output.appendChild(createTextCard('Generated SQL', message.sql));
+                        output.appendChild(createTextCard(
+                            'Result',
+                            JSON.stringify(message.data, null, 2)
+                        ));
+                        output.appendChild(createTextCard('Attempts', message.attempts));
+
+                    } else {
+                        statusBadge.className = 'status failed';
+                        statusBadge.textContent = 'Failed';
+                        output.appendChild(createTextCard(
+                            'Error',
+                            message.error || 'Query failed'
+                        ));
+                    }
+
+                } else if (message.type === 'error') {
+                    statusBadge.className = 'status failed';
+                    statusBadge.textContent = 'Failed';
+                    output.appendChild(createTextCard('Error', message.message));
                 }
             };
 
@@ -219,8 +263,8 @@
             };
 
             ws.onerror = () => {
-                statusDiv.querySelector('.status').className = 'status failed';
-                statusDiv.querySelector('.status').textContent = 'Connection error';
+                statusBadge.className = 'status failed';
+                statusBadge.textContent = 'Connection error';
                 btn.disabled = false;
             };
         }
